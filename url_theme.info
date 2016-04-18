@@ -1,0 +1,4 @@
+description   = "Switch theme based on url path"
+name          = "URL Theme"
+package = "RACC Custom Modules"
+core = 6.x

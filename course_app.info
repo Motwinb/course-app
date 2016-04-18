@@ -1,0 +1,4 @@
+description   = "Search and manage College Courses"
+name          = "Course Application"
+package = "RACC Custom Modules"
+core = 6.x

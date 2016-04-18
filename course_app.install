@@ -1,0 +1,83 @@
+<?php
+// $Id: $
+
+
+/**
+ * Implementation of hook_schema().
+ */
+function course_app_schema() {
+  $schema['course_app_search_log'] = array(
+    'description' => t('TODO'),
+    'fields' => array(
+      'uid' => array(
+        'description' => t('TODO'),
+        'type' => 'int',
+        'not null' => FALSE,
+      ),
+      'type' => array(
+        'description' => t('TODO'),
+        'type' => 'varchar',
+        'length' => 64,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'message' => array(
+        'description' => t('TODO'),
+        'type' => 'text',
+        'size' => 'big',
+        'not null' => TRUE,
+      ),
+      'hostname' => array(
+        'description' => t('TODO'),
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'timestamp' => array(
+        'description' => t('TODO'),
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implementation of hook_install().
+ */
+function course_app_install() {
+  switch ($GLOBALS['db_type']) {
+    case 'mysql':
+    case 'mysqli':
+      db_query("CREATE TABLE {course_app_search_log} (
+        uid int,
+        type varchar(64) NOT NULL default '',
+        message longtext NOT NULL,
+        hostname varchar(128) NOT NULL default '',
+        timestamp int NOT NULL default '0'
+      ) /*!40100 DEFAULT CHARACTER SET utf8 */;");
+      break;
+    case 'pgsql':
+      db_query("CREATE TABLE {course_app_search_log} (
+        uid int,
+        type varchar(64) NOT NULL default '',
+        message text NOT NULL,
+        hostname varchar(128) NOT NULL default '',
+        timestamp int NOT NULL default '0'
+      );");
+      break;
+  }
+}
+
+/**
+  hook_uninstall().
+ */
+function course_app_uninstall() {
+  // Remove tables.
+  drupal_uninstall_schema('course_app');
+}
+

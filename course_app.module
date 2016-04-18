@@ -1,0 +1,2141 @@
+<?php
+
+/**
+ * @file to support searching and managing courses - the backend database
+ * is a custom course management system database.
+ */
+
+/**
+ * hook_menu
+ */
+function course_app_menu() {
+	$items = array ();
+	
+	$items ['course/search/advanced'] = array (
+			'page callback' => 'drupal_get_form',
+			'page arguments' => array (
+					'course_app_search_advanced' 
+			),
+			'title' => 'Advanced Course Search',
+			'access arguments' => array (
+					'access content' 
+			),
+			'type' => MENU_CALLBACK 
+	);
+	
+	$items ['course'] = array (
+			'page callback' => 'course_app_course',
+			'title' => 'Course Details',
+			'type' => MENU_CALLBACK,
+			'access arguments' => array (
+					'access content' 
+			) 
+	);
+	
+	$items ['course/pdf'] = array (
+			'page callback' => 'course_pdf',
+			'type' => MENU_CALLBACK,
+			'access arguments' => array (
+					'access content' 
+			) 
+	);
+	
+	//A to Z listing 
+	$items ['course/browse'] = array (
+			'page callback' => 'course_app_browse',
+			'type' => MENU_CALLBACK,
+			// 'title'=>'Browse Courses',
+			'access arguments' => array (
+					'access content' 
+			) 
+	);
+	
+	//prospectus browser
+	$items ['course/atoz'] = array (
+			'page callback' => 'course_app_load_categories',
+			'type' => MENU_CALLBACK,
+			// 'title'=>'Browse Courses',
+			'access arguments' => array (
+					'access content'
+			)
+	);
+	
+	$items ['course/searchresults'] = array (
+			'page callback' => 'course_app_quicksearch_results',
+			'title' => 'Course Search results',
+			'type' => MENU_CALLBACK,
+			'access arguments' => array (
+					'access content' 
+			) 
+	);
+	
+
+	//searches using URL qsk, qsn etc...
+	$items ['course/list'] = array (
+			'page callback' => 'course_app_inlinesearch',
+			'type' => MENU_CALLBACK,
+			'access arguments' => array (
+					'access content' 
+			) 
+	);
+	
+	//redundant as old system
+	$items ['course/basket'] = array (
+			'page callback' => 'drupal_get_form',
+			'page arguments' => array (
+					'course_app_basket' 
+			),
+			'type' => MENU_CALLBACK,
+			'title' => 'My Course Basket',
+			'access arguments' => array (
+					'access content' 
+			) 
+	);
+	
+	$access = array (
+			'administer courses' 
+	);
+	
+	//admin panel
+	$items ['admin/settings/course'] = array (
+			'page callback' => 'drupal_get_form',
+			'page arguments' => array (
+					'course_app_settings' 
+			),
+			'title' => 'Course Admin',
+			'access arguments' => $access 
+	);
+	
+	$items ['admin/settings/course/log/view'] = array (
+			'page callback' => 'course_app_log_view',
+			'type' => MENU_LOCAL_TASK,
+			'title' => 'View Course Search Log',
+			'access arguments' => $access 
+	);
+	
+	$items ['admin/settings/course/log/delete'] = array (
+			'page callback' => 'course_app_log_clear',
+			'type' => MENU_LOCAL_TASK,
+			'title' => 'Clear Course Search Log',
+			'access arguments' => $access 
+	);
+	
+	$items ['admin/settings/course/log/download'] = array (
+			'page callback' => 'course_app_log_download',
+			'type' => MENU_LOCAL_TASK,
+			'title' => 'Download Course Search Log',
+			'access arguments' => $access 
+	);
+	
+	return $items;
+}
+
+/**
+ * hook_block - provides blocks to search for courses in different ways.
+ */
+function course_app_block($op = 'list', $delta = 0) {
+	
+	// what types of search functionality are we going to allow?
+	if ($op == 'list') {
+		$blocks = array ();
+		$blocks [0] ['info'] = 'Quick Search';
+		$blocks [1] ['info'] = 'My Courses';
+		$blocks [2] ['info'] = 'Combo Search';
+		$blocks [3] ['info'] = 'Course Categories';
+		$blocks [4] ['info'] = 'Course SubCategories';
+		return $blocks;
+	} else if ($op == 'view') {
+		switch ($delta) {
+			// Quick Search
+			case 0 :
+				$data ['subject'] = '';
+				$data ['content'] = drupal_get_form ( 'course_app_quicksearch' );
+				break;
+			// My Courses redundant as the course basket now use eEnrol
+			case 1 :
+				$data ['subject'] = '';
+				$data ['content'] = course_app_mycourses ();
+				break;
+			// Combo Search
+			case 2 :
+				$data ['subject'] = '';
+				$data ['content'] = drupal_get_form ( 'course_app_combosearch' );
+				break;
+			// Course Categories
+			case 3 :
+				$data ['subject'] = '';
+				$data ['content'] = course_app_load_categories();
+				break;
+			// Course SubCategories
+			case 4 :
+				$data ['subject'] = '';
+				$data ['content'] = 'List of Course SubCategories';
+				break;
+		}
+		return $data;
+	}
+}
+
+/**
+ * hook_theme - register themes
+ */
+function course_app_theme() {
+	return array (
+			'course_browser' => array (
+					'arguments' => array (
+							'courses' => NULL 
+					) 
+			),
+			'fk' => array (
+					'arguments' => array (
+							'courses' => NULL 
+					) 
+			),
+			'course_tree' => array (
+					'template' => 'course-tree',
+					'arguments' => array (
+							'courses' => NULL,
+							'character' => NULL,
+							'qualification' => NULL,
+							'category' => NULL,
+							'add_js' => NULL
+					) 
+			),
+			'course_category' => array (
+					'template' => 'course-category',
+					'arguments' => array (
+							'categories' => NULL,
+							'topCat' => true
+					)
+			),			
+			'course_details' => array (
+					'template' => 'course-details',
+					'arguments' => array (
+							'node' => NULL,
+							'page' => false,
+							'teaser' => true 
+					) 
+			),
+			'course_pdf' => array (
+					'arguments' => array (
+							'node' => NULL 
+					) 
+			),
+			'basket_form' => array (
+					'function' => 'theme_course_app_basket_form',
+					'arguments' => array (
+							'form' => NULL 
+					) 
+			),
+			'course_search' => array (
+					'arguments' => array (
+							'form' => NULL 
+					),
+					'template' => 'course-search' 
+			),
+			'course_search_advanced' => array (
+					'arguments' => array (
+							'form' => NULL 
+					),
+					'template' => 'course-search-advanced' 
+			) 
+	);
+}
+
+/**
+ * browse courses
+ */
+function course_app_browse($character = '', $qualification = '', $category = '', $subjectArea = '', $add_js = true, $add_catIntro = false) {
+	
+	// --------------------------
+	// Variables Initialisation
+	// --------------------------
+	$row = $result = $arrCourses = null;
+	$iCont = 0;
+	$sql = $sqlFrom = $sqlSelect = $sKey = $sCatDesc = $catIntroText = '';
+	$isAtoZ = false;
+	
+	$arrCourses = array ();
+	
+	// --------------------------
+	// Check if we are in AtoZ
+	// --------------------------
+	if ($character != '' && strtolower ( $character ) != 'all') {
+		$isAtoZ = ((strlen ( $character ) == 1) && ctype_alpha ( $character )) || $character == '0-9';
+		if (! $isAtoZ) {
+			$character = 'All'; // We ignore anything that is not A-Z or a-z.
+		}
+	}
+	
+	// --------------------------------------------------
+	// Retrieve the course data and load it to the array
+	// --------------------------------------------------
+	$sqlSelect = "SELECT DISTINCT trim(i.Code) as Code, trim(i.Description) as Description, ";
+	$sqlSelect .= "trim(i.CusText2) as catID, TRIM(c1.category) as catDesc, trim(c1.catIntro) as catIntroText, trim(i.CusText3) as Subject, TRIM(c2.category) as subDesc, trim(c2.catIntro) as subIntroText, ";
+	$sqlSelect .= "i.Days, i.CusDate1, i.CusDate2, i.Start, i.Weeks, i.CusMemo1, ifnull(f.fullfee,0) as fullfee, f.concessionary_fee as concessionary ";
+	$sqlSelect .= "FROM {courseinfo} i inner join {fullcoursefees} f using (Code) inner join {categories} c1 on c1.id = i.CusText2 inner join {categories} c2 on c2.id = i.CusText3 ";	
+	
+	$sqlFrom .= "WHERE (i.Status<>'CLOS' OR i.Status IS NULL)AND (datediff(NOW(), str_to_date(i.start, \"%%d/%%m/%%Y\"))<= 21) ";// removed this code Jan 2016 to show 2016-17 courses AND (i.Code IN('L00478-141501','L00480-141501','L00481-141501','L00482-141501') OR datediff(NOW(), str_to_date(i.start, \"%%d/%%m/%%Y\"))<= 21)
+
+	
+	// filter for qualification courses
+	if (isset ( $qualification ) && $qualification !== '') {
+		$sqlFrom .= "AND UPPER(i.CusMemo1) = 'X' ";
+	}
+	
+	// --------------------------------------------------
+	// filter by category
+	// --------------------------------------------------
+	if (isset ( $category ) && $category !== '') {
+		if (is_array ( $category )) {
+			$in = "'" . implode ( "', '", $category ) . "'";
+			$sql = "AND (trim(i.CusText2) IN ({$in})AND trim(i.CusText4) IN ({$in}))";
+		} else {
+			$sql = "AND (trim(i.CusText2) = '{$category}' OR trim(i.CusText4) = '{$category}')";
+		}
+	} elseif (isset ( $subjectArea ) && $subjectArea !== '') {
+		if (is_array ( $subjectArea )) {
+			$in = "'" . implode ( "', '", $subjectArea ) . "'";
+			$sql = "AND trim(i.CusText3) IN ({$in}) ";
+		} else {
+			$sql = "AND trim(i.CusText3) = '{$subjectArea}' ";
+		}
+		$category = $subjectArea;
+	} else {
+		
+		// Add the courses with a second subject
+		$sql = "UNION ";
+		$sql .= "SELECT DISTINCT trim(i.Code) as Code, trim(i.Description) as Description, ";
+		$sql .= "trim(i.CusText2) as catID, TRIM(c1.category) as catDesc, trim(c1.catIntro) as catIntroText, trim(i.CusText3) as Subject, TRIM(c2.category) as subDesc, trim(c2.catIntro) as subIntroText,  ";
+		$sql .= "i.Days, i.CusDate1, i.CusDate2, i.Start, i.CusMemo1, i.Weeks, ifnull(f.fullfee,0) as fullfee, f.concessionary_fee as concessionary ";
+		$sql .= "FROM {courseinfo} i inner join {fullcoursefees} f using (Code) inner join {categories} c1 on c1.id = i.CusText2 inner join {categories} c2 on c2.id = i.CusText3 ";		
+		$sql .= $sqlFrom;
+		$sql .= "AND trim(i.CusText4) != '' ";
+
+		$sql .= "ORDER BY subDesc, catDesc, Description ";
+	}
+	
+	$sql = $sqlSelect . $sqlFrom . $sql;
+	
+	// Add to the array the courses with only one course-instance entry, unifying the 'Days' information.
+	$result = db_query ( $sql );
+	
+	while ( $row = db_fetch_object ( $result ) ) {
+		
+		if (isset($category) && trim($row->catID) == $category && $row->catIntroText != null) {
+			$catIntroText = $row->catIntroText;
+		}		
+		
+		List ( $sKey, $sSubject ) = $isAtoZ ? array (
+				"letter{$character}",
+				'' 
+		) : array (
+				trim ( $row->catID ),
+				trim ( $row->Subject ) 
+		);
+		
+		// Add the Subject to the array
+		if (! array_key_exists ( $sSubject, $arrCourses )) {
+			$arrCourses [$sSubject] = array (
+					'catDes' => trim ( $row->subDesc ),
+					'subjects' => array () 
+			);
+		}
+		
+		// Add the Category to the array
+		if (! array_key_exists ( $sKey, $arrCourses [$sSubject] ['subjects'] )) {
+			$arrCourses [$sSubject] ['subjects'] [$sKey] = array (
+					'catDes' => trim ( $row->catDesc ),
+					'courses' => array () 
+			);
+		}
+		
+		$iCont = count ( $arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] );
+		if ($iCont > 0 && ($arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont - 1]->Code == $row->Code)) {
+			$arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont - 1]->Days .= ", " . ucfirst ( $row->Days );
+		} else {
+			$row->Days = ucfirst ( $row->Days );
+			$arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont ++] = $row;
+		}
+	}
+	
+	if ($add_catIntro) {
+		return check_markup($catIntroText, FILTER_FORMAT_DEFAULT, false) . theme ('course_tree', $arrCourses, $character, $qualification, $category, $add_js);
+	} else {
+		return theme ('course_tree', $arrCourses, $character, $qualification, $category, $add_js);
+	}
+}
+
+/**
+ * let user search for either courses or the website.
+ * a better approach would be to use the hook_search() framework - but
+ * the courses are not integrated into the node framework so may pose other
+ * challenges.
+ */
+function course_app_combosearch(&$form_state) {
+	$form = array ();
+	$form ['#theme'] = 'course_search';
+	$form ['keys'] = array (
+			'#type' => 'textfield',
+			'#size' => 17 
+	);
+	$form ['submit'] = array (
+			'#type' => 'submit',
+			'#value' => t ( 'Search' ) 
+	);
+	$choices = array (
+			'site' => t ( 'Site' ),
+			'courses' => t ( 'Courses' ) 
+	);
+	$form ['search_in'] = array (
+			'#type' => 'radios',
+			'#options' => $choices,
+			'#default_value' => 'courses' 
+	);
+	$form ['search_options'] = array (
+			'#type' => 'markup',
+			'#value' => l ( t ( 'More Options' ), 'course/search/advanced' ) 
+	);
+	return $form;
+}
+
+/**
+ * hook_submit for combo search handler.
+ * redirect to site search or to course search depending on selection.
+ */
+function course_app_combosearch_submit($form, &$form_state) {
+	if ($form_state ['values'] ['search_in'] == 'site') {
+		$form_state ['values'] [$form_state ['values'] ['form_id']] = $form_state ['values'] ['keys'];
+		return search_box_form_submit ( $form, $form_state );
+	} else {
+		$form_state ['values'] ['keyword_text'] = $form_state ['values'] ['keys'];
+		$form_state ['redirect'] = course_app_quicksearch_submit ( $form, $form_state );
+	}
+}
+
+/**
+ * helper function to create the next 12 months for a picklist
+ */
+function _course_app_start_months() {
+	$month = array (
+			'',
+			'Jan',
+			'Feb',
+			'Mar',
+			'Apr',
+			'May',
+			'Jun',
+			'Jul',
+			'Aug',
+			'Sep',
+			'Oct',
+			'Nov',
+			'Dec' 
+	);
+	$v = array (
+			'Any' => 'Any' 
+	);
+	$m = date ( 'n' );
+	$y = date ( 'Y' );
+	for($i = 0; $i < 24; $i ++) {
+		if ($m > 12) {
+			$m = 1;
+			$y ++;
+		}
+		if ($m < 10) {
+			$v ["0$m/$y"] = $month [$m] . '-' . $y;
+		} else {
+			$v ["$m/$y"] = $month [$m] . '-' . $y;
+		}
+		$m ++;
+	}
+	return $v;
+}
+
+/**
+ * advanced search form for courses.
+ * Reuse the quick search form.
+ * this will be formatted differently.
+ */
+function course_app_search_advanced(&$form_state) {
+	$form = array ();
+	$form_values = $_SESSION ['course_app'] ['search'];
+	$form ['#theme'] = 'course_search_advanced';
+	
+	/*
+	 * Jose (23/09/2011) Change on the sql that loads the search drop down box. Old query: $result = db_query('SELECT * FROM {categories} WHERE parentID=0 ORDER BY category ASC');
+	 */
+	$result = db_query ( 'SELECT * FROM {categories} WHERE parentID = ID ORDER BY category ASC' );
+	
+	$options = array (
+			'' => t ( 'All Topics' ) 
+	);
+	while ( $cat = db_fetch_object ( $result ) ) {
+		$options [$cat->ID] = $cat->category;
+	}
+	
+	$start_months = _course_app_start_months ();
+	
+	$days = array (
+			'Monday',
+			'Tuesday',
+			'Wednesday',
+			'Thursday',
+			'Friday',
+			'Saturday',
+			'Sunday',
+			'Any' 
+	);
+	$days = array_combine ( $days, $days );
+	$time = array (
+			'Daytime',
+			'Evening',
+			'Any' 
+	);
+	$time = array_combine ( $time, $time );
+	
+	$form ['keyword_text'] = array (
+			'#type' => 'textfield',
+			'#title' => t ( 'Search by keyword, subject area or Course Code' ),
+			'#size' => 32,
+			'#default_value' => $form_values ['keyword_text'],
+			//'#description' => t ( 'Enter in any keywords or the coursecode if you know it' ) 
+	);
+	$form ['categories'] = array (
+			'#type' => 'select',
+			'#title' => t ( 'Select section' ),
+			'#multiple' => false,
+			'#size' => 1,
+			'#options' => $options,
+			'#default_value' => $form_values ['categories'] 
+	);
+	
+	//$form ['course_code'] = array (
+		//'#type' => 'textfield',
+			//'#title' => t ( 'Course Code' ),
+			//'#size' => 32,
+		//	'#default_value' => $form_values ['course_code'] 
+//	);
+	$form ['starting_date'] = array (
+			'#type' => 'select',
+			'#title' => t ( 'In Month' ),
+			'#default_value' => $form_values ['starting_date'],
+			'#size' => 1,
+			'#options' => $start_months 
+	);
+	$default = $form_values ['days'] ? $form_values ['days'] : array (
+			'Any' => 'Any' 
+	);
+	$form ['days'] = array (
+			'#type' => 'checkboxes',
+			'#title' => t ( 'Day(s) best for you' ),
+			'#options' => $days,
+			'#default_value' => $default 
+	);
+	$default = $form_values ['time'] ? $form_values ['time'] : array (
+			'Any' => 'Any' 
+	);
+	$form ['time'] = array (
+			'#type' => 'checkboxes',
+			'#title' => t ( 'Preferred time of day' ),
+			'#options' => $time,
+			'#default_value' => $default 
+	);
+	$form ['submit'] = array (
+			'#type' => 'submit',
+			'#value' => t ( 'Search' ) 
+	);
+	
+	return $form;
+}
+function course_app_search_advanced_submit($form, &$form_state) {
+	/**
+	 * drupal_set_message('done');
+	 */
+	$form_state ['redirect'] = course_app_quicksearch_submit ( $form, $form_state ); // form_state['values']['form_id'], $form_state['values']);
+}
+
+
+function course_app_quicksearch_submit($form, &$form_state) {
+	// build a search result and jump to results page.
+	$_SESSION ['course_app'] ['search'] = $form_state ['values'];
+	course_app_log ( 'Course Search', 'Keywords:' . $form_state ['values'] ['keyword_text'] );
+	return 'course/searchresults';
+}
+
+function course_app_inlinesearch($college = '', $categories = '', $keywords = '', $new = '', $noTitle = false) {
+	if ($college == '') {
+		$college = $_GET ['qsc'];
+	}
+	if ($categories == '') {
+		$categories = $_GET ['qst'];
+	}
+	if ($keywords == '') {
+		$keywords = $_GET ['qsk'];
+	}
+	if ($new == '') {
+		$new = $_GET ['qsn'];
+	}
+	
+	course_app_log ( 'Inline Course Search', ' Categories:' . $categories . ' Keywords:' . $keywords );
+	
+	$form ['keyword_text'] = $keywords;
+	$form ['categories'] = $categories;
+	$form ['new_courses'] = $new;
+	$_SESSION ['course_app'] ['search'] = $form;
+	return course_app_quicksearch_results ( $noTitle );
+}
+
+function course_app_inline_flagsearch($flag = NULL) {
+	
+	$arrCourses = null;
+	course_app_log ("Inline Flag Search", "Flag: {$flag}");
+	
+	$sql = "";
+	
+	$sql = "SELECT DISTINCT trim(i.Code) as Code, trim(i.Description) as Description, ";
+	$sql .= "trim(i.CusText2) as catID, (select TRIM(category) from categories where id = i.CusText2 LIMIT 1) as catDesc, ";
+	$sql .= "trim(i.CusText3) as Subject, (select TRIM(category) from categories where id = i.CusText3 LIMIT 1) as subDesc, ";
+	$sql .= "i.Days, i.CusDate1, i.CusDate2, i.Start, i.Weeks, ifnull(f.fullfee,0) as fullfee, f.concessionary_fee as concessionary ";
+	$sql .= "FROM {courseinfo} i inner join {fullcoursefees} f using (Code) inner join {coursesections} cs using (Code) ";
+	$sql .= "WHERE (i.Status<>'CLOS' OR i.Status IS NULL) ";	
+	
+	// Filter by flags
+	$flag = strtoupper($flag);
+	switch ($flag) {
+		case "BT14":
+		case "BZ14":
+		case "LE14":
+		case "RCLP":
+		case "MS14":
+		case "HE14":
+		case "FL14":
+		case "LD14":
+		case "OPP":
+		case "EMP":
+		case "QUAL":
+		case "LFF":
+		case "WB":	
+		case "TECH":			
+			break;
+		default:
+			$flag = 'NONE';							
+	}
+	
+	$sql .= "AND cs.sectionID = '{$flag}' ";
+	
+	$sql .= "GROUP BY i.Code ";
+	
+	$sql .= ' ORDER BY case when datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y")) > 21';
+	$sql .= ' then abs(datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y"))) + 999';
+	$sql .= ' else abs(datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y"))) end';
+	
+	$result = db_query ($sql);
+	
+	while ( $row = db_fetch_object ( $result ) ) {
+	
+		List ( $sKey, $sSubject ) = array(trim ( $row->catID ), trim ( $row->Subject ));
+	
+		// Add the Subject to the array
+		if (! array_key_exists ( $sSubject, $arrCourses )) {
+			$arrCourses [$sSubject] = array ('catDes' => trim ( $row->subDesc ), 'subjects' => array ());
+		}
+		
+		// Add the Category to the array
+		if (! array_key_exists ( $sKey, $arrCourses [$sSubject] ['subjects'] )) {
+			$arrCourses [$sSubject] ['subjects'] [$sKey] = array (
+					'catDes' => trim ( $row->catDesc ),
+					'courses' => array ()
+			);
+		}
+	
+		$iCont = count ( $arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] );
+		if ($iCont > 0 && ($arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont - 1]->Code == $row->Code)) {
+			$arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont - 1]->Days .= ", " . ucfirst ( $row->Days );
+		} else {
+			$row->Days = ucfirst ( $row->Days );
+			$arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont ++] = $row;
+		}
+	}
+	
+	return theme ('course_tree', $arrCourses, NULL, NULL, 'FLAGSEARCH');	
+
+}
+
+function course_app_quicksearch_results($noTitle = false) { //course search
+	$w = $a = null;
+	
+	if (! $noTitle) {
+		drupal_set_title ( t ( 'Course Finder' ) );
+	}
+	
+	$sql = $count_sql = $sqlFrom = $sqlCountFrom = $sqlBody = "";
+	
+	$param = $_SESSION ['course_app'] ['search'];
+	
+	// Jose: constructing the sql to query the database.
+	$sql = "SELECT DISTINCT i.Code, i.Description, i.CusMemo10, i.Overview, i.Status, i.Cuslook1, i.CusMemo1, i.Start, GROUP_CONCAT(i.Days SEPARATOR ', ') as Days, LEFT(i.CusDate1, 5) as CusDate1, LEFT(i.CusDate2, 5) as CusDate2, s.Centre ";
+	
+	// Jose: since now one course-instance exists on the db more than once, change the count sql
+	// to reflect the right information
+	$count_sql = "SELECT count(*) FROM ( SELECT 1 ";
+	
+	$sqlFrom = "FROM {courseinfo} i LEFT JOIN {tblcentre} s ON i.SiteID=s.CentreID WHERE (i.Status != 'CLOS' OR i.Status IS NULL) ";
+	$sqlCountFrom = "FROM {courseinfo} i WHERE (i.Status != 'CLOS' OR i.Status IS NULL) ";
+	$sqlBody .= "AND i.VLE != '0' ";
+	
+	// Jose 28.06.2013
+	// Cut off for courses 3 weeks (21 days)
+	// Jose 23/11/2013
+	// The date filter is done in REMS turned back on 260115 to show Umbrella codes for Foundation courses
+	//$sql .= "AND datediff(NOW(), str_to_date(i.start, \"%%d/%%m/%%Y\")) <= 21";
+	
+	$sql .= $sqlFrom . $sqlBody;
+	$count_sql .= $sqlCountFrom . $sqlBody;
+	
+	// search all fields for keywords
+	$param ['keyword_text'] = trim ( $param ['keyword_text'] );
+	
+	if ($param ['keyword_text'] != '') {
+		
+		// only search title (stored in description, the coursecode and the description stored in Content
+		$sql = "SELECT DISTINCT i.Code, i.Description, i.CusMemo10, i.Overview, i.Status, i.Cuslook1, i.CusMemo1, i.Start,  GROUP_CONCAT(i.Days SEPARATOR ', ') as Days, LEFT(i.CusDate1, 5) as CusDate1, LEFT(i.CusDate2, 5) as CusDate2, s.Centre, ";
+		$sql .= "MATCH (i.Description) AGAINST ('%s') AS matchdesc, ";
+		$sql .= "MATCH (i.cusmemo10) AGAINST ('%s') AS matchkey, ";
+		$sql .= "MATCH (i.Overview) AGAINST ('%s') AS matchoverview ";
+		$sql .= "FROM {courseinfo} i ";
+		$sql .= "LEFT JOIN {tblcentre} s ON i.SiteID=s.CentreID ";
+		$sql .= "WHERE (i.STATUS != 'CLOS' OR i.STATUS IS NULL) ";
+
+		// Jose 28.06.2013
+		// Cut off for courses 3 weeks (21 days)
+		// Jose 23/11/2013
+		// The date filter is done in REMS back on 260115 to show Umbrella codes for Foundation courses
+		//$sql .= "AND datediff(NOW(), str_to_date(i.start, \"%%d/%%m/%%Y\")) <= 21 ";
+		$w [] = "(
+                            MATCH (i.Description,i.CusMemo10,i.Overview) AGAINST ('%s' IN BOOLEAN MODE) 
+                            AND 
+                            (
+                                (
+                                    (
+                                        MATCH (i.Description) AGAINST ('%s') != 0 OR 
+                                        MATCH (i.CusMemo10) AGAINST ('%s') != 0
+                                    ) OR 
+                                    FLOOR(MATCH (i.Overview) AGAINST ('%s')) > 2.5 
+                                ) OR 
+                                ( 
+                                    MATCH (i.Description) AGAINST ('%s') > 2.5 OR 
+                                    MATCH (i.CusMemo10) AGAINST ('%s') > 2.5 
+                                )
+                            )
+                         ) ";
+		
+
+		//$o = ' ORDER BY case when datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y")) > 21';
+		//$o .= ' then abs(datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y"))) + 999';
+		//$o .= ' else abs(datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y"))) end, (2*matchdesc) + (1.5*matchkey) + matchoverview DESC';
+		
+		// all keywords
+		$keyword_text = $param ['keyword_text'];
+		$keywords = split ( ' ', $keyword_text );
+		
+		// If the search contains more than one parameter and one of those is a number, we delete the number
+		if (count ( $keywords ) > 1) {
+			foreach ( $keywords as $key => $value ) {
+				if (is_numeric ( $value )) {
+					unset ( $keywords [$key] );
+				}
+	
+				if ((strlen($value) <= 3)) {
+					unset ( $keywords [$key] );
+				}
+		// If the search contains word 'with'		
+				if ($value === 'with') {
+					unset ( $keywords [$key] );
+				}
+			}
+		}
+		
+		$keyword_text = '+' . join ( '* +', $keywords ) . '*';
+		
+		// drupal_set_message($keyword_text);
+		// As many as '%s' in the query needed to replace them
+		$a [] = $keyword_text;
+		$a [] = $keyword_text;
+		$a [] = $keyword_text;
+		$a [] = $keyword_text;
+		$a [] = $keyword_text;
+		$a [] = $keyword_text;
+		$a [] = $keyword_text;
+		$a [] = $keyword_text;
+		$a [] = $keyword_text;
+	}
+	
+	if (isset ( $param ['starting_date'] ) && $param ['starting_date'] != 'Any') {
+		$w [] = "RIGHT(Start, 7) = '%s'";
+		$a [] = $param ['starting_date'];
+	}
+	
+	if (isset ( $param ['course_code'] )) {
+		$param ['course_code'] = trim ( $param ['course_code'] );
+		if ($param ['course_code'] != '') {
+			$w [] = "i.Code = '%s'";
+			$a [] = $param ['course_code'];
+		}
+	}
+	
+	if (isset ( $param ['categories'] )) {
+		if (is_array ( $param ['categories'] )) {
+			$cat = array_filter ( $param ['categories'] );
+			$w [] = '(trim(i.CusText2) IN (%s) OR trim(i.CusText4) IN (%s))';
+			$a [] = "'" . implode ( "', '", $cat ) . "'";
+			$a [] = "'" . implode ( "', '", $cat ) . "'";
+		} else {
+			if ($param ['categories'] != '') {
+				$w [] = "(trim(i.CusText2) = '%s' OR trim(i.CusText4) = '%s' OR trim(i.CusText3) = '%s')";
+				$a [] = $param ['categories'];
+				$a [] = $param ['categories'];
+				$a [] = $param ['categories'];
+			}
+		}
+	}
+	
+	if (isset ( $param ['colleges'] )) {
+		if (is_array ( $param ['colleges'] )) {
+			$col = array_filter ( $param ['colleges'] );
+			$w [] = "(i.cuslook1 IN ('%s'))";
+			$a [] = implode ( "','", $col );
+		} else {
+			if ($param ['colleges'] != '') {
+				$w [] = "(i.cuslook1 = '%s')";
+				$a [] = $param ['colleges'];
+			}
+		}
+	}
+	if (isset ( $param ['days'] )) {
+		$d = null;
+		$days = array_filter ( $param ['days'] );
+		foreach ( $days as $day ) {
+			 if (in_array ( $day, array (
+					'Monday',
+					'Tuesday',
+					'Wednesday',
+					'Thursday',
+					'Friday',
+					'Saturday',
+					'Sunday' 
+			) ) === true) {
+				$d [] = "i.days like '%%%s%%'";
+				$a [] = ucfirst ( substr ( $day, 0, 3 ) );
+			}
+		}
+		if (count ( $d ) > 0) {
+			$w [] = '(' . implode ( ' OR ', $d ) . ')';
+		}
+	}
+	
+	if (isset ( $param ['time'] )) {
+		$time = array_filter ( $param ['time'] );
+		if (count ( $time ) == 1) { // selected both do nothing..
+			if (current ( $time ) == 'Daytime') {
+				$w [] = "(substr(i.CusDate1, 1, 2) < '18' OR substr(i.CusDate2, 1, 2) < '18')";
+			} elseif (current ( $time ) == 'Evening') {
+				$w [] = "(substr(i.CusDate1, 1, 2) >= '18' OR substr(i.CusDate2, 1, 2) >= '18')";
+			}
+		}
+	}
+	
+	if (preg_match ( '/^y|^yes/i', $param ['new_courses'] )) {
+		$w [] = "(i.New = 'Y')";
+	}
+	
+	if (count ( $w ) > 0) {
+		$sql = $sql . ' AND ' . implode ( ' AND ', $w );
+		$count_sql = $count_sql . ' AND ' . implode ( ' AND ', $w );
+	}
+	
+	// Added to the end of the sql query to ensure the search by course code is correct.
+	if ($param ['keyword_text'] != '') {
+		// Jose 23/11/2013
+		// The date filter is done in REMS back on 260115 to show Umbrella codes for Foundation courses
+		//$sql .= " OR (i.CODE LIKE '%%{$param['keyword_text']}%%' AND (i.STATUS != 'CLOS' OR i.STATUS IS NULL) AND i.VLE != '0' AND  datediff(NOW(), str_to_date(i.start, \"%%d/%%m/%%Y\")) <= 21 ";
+		//$count_sql .= " OR (i.CODE LIKE '%%{$param['keyword_text']}%%' AND (i.STATUS != 'CLOS' OR i.STATUS IS NULL) AND i.VLE != '0' AND datediff(NOW(), str_to_date(i.start, \"%%d/%%m/%%Y\")) <= 21) ";
+		$sql .= " OR (i.CODE LIKE '%%{$param['keyword_text']}%%' AND (i.STATUS != 'CLOS' OR i.STATUS IS NULL)) ";
+		$count_sql .= " OR (i.CODE LIKE '%%{$param['keyword_text']}%%' AND (i.STATUS != 'CLOS' OR i.STATUS IS NULL)) ";
+	//} else { removed else to order search by date Lucy 2015
+	 	//$o = " ORDER BY abs(datediff(NOW(), str_to_date(i.start, \"%%d/%%m/%%Y\"))) ASC, i.code ASC ";
+		$o = ' ORDER BY case when datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y")) > 21';
+		$o .= ' then abs(datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y"))) + 999';
+		$o .= ' else abs(datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y"))) end, i.code';
+	}
+	
+	$items_per_page = 10;
+	if ($_GET ['results'] == 'all') {
+		$items_per_page = 1000;
+	}
+	$pager_id = 0;
+	
+	// Jose: close $sql and $count_sql
+	$sql = $sql . " GROUP BY i.Code " . $o;
+	$count_sql .= " GROUP BY i.Code ) coursesTemp ";
+	$result = pager_query_course ( $sql, $items_per_page, $pager_id, $count_sql, ($param ['keyword_text'] != ''), $a );
+	$output .= theme_course_app_search_pager ( $pager_id, $items_per_page );
+	if ($result) {
+		
+		while ( $course = db_fetch_object ( $result ) ) {
+			$output .= theme ( 'course_details', $course, FALSE, TRUE );
+		}
+	}
+	
+	$output .= theme_course_app_search_pager ( $pager_id, $items_per_page );
+	
+	global $pager_total_items;
+	
+	if (! $pager_total_items [$pager_id] && ! $noTitle) {
+		$output = t ( 'Sorry, no courses were found to meet your requirements. Please search again with different options selected.' );
+		drupal_set_message ( $output );
+		drupal_goto ( 'course/search/advanced' );
+	}
+	
+	$output = theme_course_app_search_results_page () . $output;
+	
+	return $output;
+}
+
+
+/*
+ * theme the header for the search results here.
+ */
+function theme_course_app_search_results_page() {
+	return '<p>Your search results are below click ' . l ( 'here', 'course/search/advanced' ) . ' to change your criteria</p>';
+}
+
+function theme_course_app_search_pager($pager_id, $items_per_page) {
+	global $pager_total_items;
+	global $pager_page_array;
+	$from_item = $pager_page_array [$pager_id] * $items_per_page;
+	$to_item = $from_item + $items_per_page;
+	$total_items = $pager_total_items [$pager_id];
+	$to_item = $to_item > $total_items ? $total_items : $to_item;
+	
+	if ($total_items > 0) {
+		$pager_note = t ( 'Results %from_item-%to_item of %total_items', array (
+				'%from_item' => $from_item + 1,
+				'%to_item' => $to_item,
+				'%total_items' => $total_items 
+		) );
+	}
+	
+	if ($to_item - $from_item < $total_items) {
+		$pager_note .= ' ' . l ( t ( 'View all' ), 'course/searchresults', array (
+				'attributes' => '',
+				'query' => 'results=all' 
+		) );
+	}
+	
+	$output = '<div class="pagination">';
+	$output .= $pager_note;
+	$tags = array (
+			'First',
+			'Prev',
+			'',
+			'Next',
+			'Last' 
+	);
+	$output .= theme ( 'pager', $tags, $items_per_page, $pager_id );
+	$output .= '</div>';
+	return $output;
+}
+
+/**
+ * function to load a course from the database and its details.
+ */
+function course_app_load_course($nid) {
+	
+	// -----------------------------
+	// Variables declaration.
+	// -----------------------------
+	$node = null;
+	$tmpNode = null;
+	
+	// -----------------------------
+	// Load the course information.
+	// -----------------------------
+	$sql = "SELECT o.*, ltrim(group_concat(concat(o.days, \" (\", o.CusDate1, \" to \", o.CusDate2, \")\"))) as daystimes ";
+	$sql .= "FROM (SELECT i.Code, i.Description, i.Start, i.CusMemo1, i.Weeks, i.Status, i.CusText2, i.Overview, i.EntryReq, i.Content, i.Assessment, i.Additional, ";
+	$sql .= "i.First_class, i.Attendance, i.Further_study, i.Enrolment, i.FAQ, i.WarnEnr, i.cuslook1, i.AddLoan, LEFT(i.CusDate1, 5) as CusDate1, LEFT(i.CusDate2, 5) as CusDate2, ";
+	$sql .= "group_concat(\" \",concat(upper(left(i.days,1)), substring(i.days from 2))) as days, date_format(i.planend, '%%d/%%m/%%Y') as end_date, c.*, s.* ";
+	$sql .= "FROM {courseinfo} i LEFT JOIN {categories} c ON c.id = i.custext2 LEFT JOIN {tblcentre} s ON i.SiteID=s.CentreID ";
+	$sql .= "WHERE i.Code='%s' ";
+	$sql .= "AND (i.STATUS != 'CLOS' OR i.STATUS IS NULL)";
+	$sql .= "GROUP BY code, CusDate1, CusDate2 ";
+	$sql .= "ORDER BY CASE days ";
+	$sql .= "WHEN 'mon' THEN 1 WHEN 'tue' THEN 2 WHEN 'wed' THEN 3 WHEN 'thu' THEN 4 WHEN 'fri' THEN 5 WHEN 'sat' THEN 6 WHEN 'sun' THEN 7 ";
+	$sql .= "END ASC) AS o ";
+	$sql .= "GROUP BY o.code ";
+	
+	$result = db_query ( $sql, $nid );
+	
+	if ($result) {
+		
+		// -----------------------------
+		// Creation of the course object.
+		// -----------------------------
+		$node = db_fetch_object ( $result );
+		
+		// ----------------------------------
+		// Addition of the Concessionary_Fee
+		// ----------------------------------
+		$courseFees = db_fetch_array ( db_query ( "SELECT IFNULL(FullFee, 0) as fullFee, Concessionary_Fee FROM {fullcoursefees} WHERE Code='%s'", $nid ) );
+		$node->fullFee = $courseFees ['fullFee'];
+		$node->Concessionary_Fee = $courseFees ['Concessionary_Fee'];
+		$node->nonEUDiscount = db_result ( db_query ( "SELECT IFNULL(NonEu, 0) FROM {noneufees} WHERE Code='%s'", $nid ) );
+		$node->fullFeeDiscount = db_result ( db_query ( "SELECT IFNULL(DiscountValue, 0) FROM {fullfeedisc} WHERE Code='%s'", $nid ) );
+		$node->eufee = $node->fullFee - $node->fullFeeDiscount;
+		$node->noneufee = $node->nonEUDiscount;
+		
+		// -----------------------------------------------
+		// Load any alternative date/time for the course.
+		// -----------------------------------------------
+		$node->AltInstances = null;
+		List ( $courseCode, $courseInstance ) = explode ( "-", $node->Code );
+		
+		$sql = 'SELECT o.*, ltrim(group_concat(concat(o.days, " (", o.CusDate1, " to ", o.CusDate2, ")"))) as daystimes ';
+		$sql .= 'FROM (SELECT Code, Description, Start, Weeks, LEFT(CusDate1, 5) as CusDate1, LEFT(CusDate2, 5) as CusDate2, group_concat(" ",concat(upper(left(days,1)), substring(days from 2))) as days ';
+		$sql .= "FROM {courseinfo} ";
+		$sql .= "WHERE Code LIKE '%s%' ";
+		$sql .= "AND Description != '%PAYG%' ";	
+		$sql .= "AND Code != '%s' ";
+		$sql .= "AND (STATUS != 'CLOS' OR STATUS IS NULL)";
+		// Jose 23/11/2013
+		// The date filter is done in REMS back on 260115 to show Umbrella codes for Foundation courses
+		$sql .= "AND datediff(NOW(), str_to_date(start, \"%%d/%%m/%%Y\")) <= 21 ";
+		$sql .= "GROUP BY code, CusDate1, CusDate2 ";
+		$sql .= "ORDER BY CASE days WHEN 'mon' THEN 1 WHEN 'tue' THEN 2 WHEN 'wed' THEN 3 WHEN 'thu' THEN 4 WHEN 'fri' THEN 5 WHEN 'sat' THEN 6 WHEN 'sun' THEN 7 END ASC) AS o ";
+		$sql .= "GROUP BY o.code ";
+		
+		$arg = array (
+				$courseCode,
+				$node->Code 
+		);
+		$res = db_query ( $sql, $arg );
+		if ($res) {
+			while ( $tmpNode = db_fetch_object ( $res ) ) {
+				$node->AltInstances [$tmpNode->Code] = array (
+						'code' => $tmpNode->Code,
+						'desc' => $tmpNode->Description,
+						'date' => $tmpNode->Start,
+						'weeks' => $tmpNode->Weeks,
+						'days' => $tmpNode->daystimes 
+				);
+			}
+		}
+		// ---------------------
+		// Load similar courses.
+		// ---------------------
+		$sql = 'SELECT o.*, ltrim(group_concat(concat(o.days, " (", o.CusDate1, " to ", o.CusDate2, ")"))) as daystimes ';
+		$sql .= 'FROM (SELECT Code, Description, Start, Weeks, LEFT(CusDate1, 5) as CusDate1, LEFT(CusDate2, 5) as CusDate2, group_concat(" ",concat(upper(left(days,1)), substring(days from 2))) as days ';
+		$sql .= 'FROM courseinfo ';
+		$sql .= "WHERE CusText2 = '%s' ";
+		$sql .= "AND LEFT(Code, 6) != '%s' ";
+		$sql .= "AND (STATUS != 'CLOS' OR STATUS IS NULL)";
+		// Jose 23/11/2013
+		// The date filter is done in REMS back on 260115 to show Umbrella codes for Foundation courses
+		$sql .= "AND  datediff(NOW(), str_to_date(start, \"%%d/%%m/%%Y\")) <= 21";
+		$sql .= 'GROUP BY code, CusDate1, CusDate2 ';
+		$sql .= 'GROUP BY o.code ';
+		// Jose 28.06.2013
+		// Limit the number of alternative courses to 5
+		// $sql .= 'ORDER BY o.Description';
+		$sql .= 'ORDER BY str_to_date(o.start, "%%d/%%m/%%Y"), o.Code LIMIT 5';
+		
+		$arg = array (
+				$node->CusText2,
+				$courseCode 
+		);
+		$res = db_query ( $sql, $arg );
+		
+		if ($res) {
+			while ( $sim = db_fetch_object ( $res ) ) {
+				// Jose 28.06.2013
+				// Limit the list of similar courses to 5 and addition of the link back to the course search
+				$sim->Course_Category = $node->CusText2;
+				$node->SimilarCourses [$sim->Code] = $sim;
+			}
+		} else {
+			$node->SimilarCourses = null;
+		}
+		
+		$is_closed = $is_full = FALSE;
+		
+		// -----------------------------
+		// is the course full?
+		// -----------------------------
+		$is_full = db_result ( db_query ( "SELECT 1 FROM {fullcourses} WHERE code='%s' and status='f'", $nid ) );
+		$node->is_full = $is_full;
+		
+		// -----------------------------
+		// is the course closed?
+		// -----------------------------
+		$is_closed = db_result ( db_query ( "SELECT 1 FROM {fullcourses} WHERE code='%s' and status='c'", $nid ) );
+		$node->is_closed = $is_closed;
+		
+		return $node;
+	} else {
+		return null;
+	}
+}
+
+/**
+ * callback to display information on a single course.
+ */
+function course_app_course($nid) {
+	$node = course_app_load_course ( $nid );
+	if ($node->Code == '') {
+		drupal_set_message ( "The courses {$nid} does not exist on the database. Click <a href=\"/course/search/advanced\">here</a> to be redirected to the Advanced Search page. Apologies for any inconvenience." );
+		drupal_not_found ();
+	}
+	
+	drupal_set_title ( $node->Description . ' (' . $node->Code . ')' );
+	
+	// Print the course keywords plus the default keywords
+	$txtMetaKeywords = '<meta name="keywords" content="#1#, RACC, Richmond Adult Community College, Adult Education, College, Richmond, Richmond College, London, Adult Learning, Weekend, Evening Classes" />';
+	$txtMetaKeywords = str_replace ( '#1#', '' . $node->CusMemo10, $txtMetaKeywords );
+	
+	drupal_set_html_head ( $txtMetaKeywords );
+	
+	return theme ( 'course_details', $node, TRUE, FALSE );
+}
+
+
+
+/**
+ * helper function to log messages into a course app log to track
+ * search keywords, checkouts etc.
+ */
+function course_app_log($type, $message) {
+	global $user, $base_root;
+	
+	if (variable_get ( 'course_app_logging', FALSE )) {
+		db_query ( "INSERT INTO {course_app_log} (uid, type, message, hostname, timestamp) VALUES (%d, '%s', '%s', '%s', %d)", $user->uid, $type, $message, ip_address (), time () );
+	}
+}
+
+/**
+ * callback function to display entries in the courseapp log table.
+ */
+function course_app_log_view() {
+	if (! variable_get ( 'course_app_logging', FALSE )) {
+		drupal_set_message ( t ( 'Course Search Logging is currently disabled' ) );
+	}
+	
+	$sql = "SELECT c.*,u.name FROM {course_app_log} c JOIN {users} u ON u.uid=c.uid";
+	
+	$header = array (
+			array (
+					'data' => t ( 'Type' ),
+					'field' => 'c.type' 
+			),
+			array (
+					'data' => t ( 'Date' ),
+					'field' => 'c.timestamp',
+					'sort' => 'desc' 
+			),
+			array (
+					'data' => t ( 'Message' ),
+					'field' => 'c.message' 
+			),
+			array (
+					'data' => t ( 'User' ),
+					'field' => 'u.name' 
+			),
+			array (
+					'data' => t ( 'Hostname' ),
+					'field' => 'c.hostname' 
+			) 
+	);
+	
+	$tablesort = tablesort_sql ( $header );
+	$result = pager_query ( $sql . $tablesort, 50 );
+	
+	while ( $log = db_fetch_object ( $result ) ) {
+		$rows [] = array (
+				'data' => array (
+						// Cells
+						t ( $log->type ),
+						format_date ( $log->timestamp, 'small' ),
+						$log->message,
+						theme ( 'username', $log ),
+						$log->hostname 
+				) 
+		);
+	}
+	
+	if (! $rows) {
+		$rows [] = array (
+				array (
+						'data' => t ( 'No log messages available.' ),
+						'colspan' => 5 
+				) 
+		);
+	}
+	
+	$output .= theme ( 'table', $header, $rows );
+	$output .= theme ( 'pager', NULL, 50, 0 );
+	
+	return $output;
+}
+
+/**
+ * allow download of the courseapp keyword log as a CSV file.
+ */
+function course_app_log_download() {
+	header ( "Content-type: application/octet-stream" );
+	header ( "Content-Disposition: attachment; filename=\"course-search.csv\"" );
+	$sql = "SELECT c.*,u.name FROM {course_app_log} c JOIN {users} u ON u.uid=c.uid ORDER BY c.timestamp DESC";
+	$result = db_query ( $sql );
+	print "Category,Date,Message,User,Hostname\n";
+	while ( $log = db_fetch_object ( $result ) ) {
+		printf ( '%s,%s,"%s",%s,%s\n', t ( $log->type ), format_date ( $log->timestamp, 'small' ), $log->message, theme ( 'username', $log ), $log->hostname );
+	}
+	
+	exit ();
+}
+
+/**
+ * callback to clear the course app search log.
+ */
+function course_app_log_clear() {
+	drupal_set_message ( 'Cleared course app search log' );
+	db_query ( "DELETE FROM {course_app_log}" );
+	drupal_goto ( 'admin/settings/course' );
+}
+
+/**
+ * hook_perm
+ * only allow admin to access and manipulate log.
+ */
+function course_app_perm() {
+	return array (
+			'administer courses' 
+	);
+}
+
+/**
+ * configure course app
+ */
+function course_app_settings() {
+	$form = array ();
+	
+	$form ['course_app_logging'] = array (
+			'#type' => 'checkbox',
+			'#title' => t ( 'Enable Course App Search Logging' ),
+			'#default_value' => variable_get ( 'course_app_logging', FALSE ),
+			'#description' => t ( 'Check to enable logging of course app searches and other functions' ) 
+	);
+	return system_settings_form ( $form );
+}
+
+
+
+
+/**
+ * function to theme the course browser.
+ */
+
+function course_app_clearmarkup($field) {
+	if ($field == '') {
+		$field = '<p>n/a</p>';
+	}
+	$field = preg_replace ( '/^\s*\n/', '<p>', $field );
+	$field = preg_replace ( '/\n/', '<br />', $field );
+	return check_markup ( $field );
+}
+
+/**
+ * Utility function to load the course subject areas and subcategories
+ * @return HTML Output 
+ */
+function course_app_load_categories($codCat = null) {
+	
+	// --------------------------
+	// Variables Initialisation
+	// --------------------------
+	$row = $result = $arrCategories = null;
+	$sql = $catID = $catIntro = '';
+	$showCourses = $topCat = true;
+	
+	$arrCategories = array ();
+
+	// --------------------------
+	// Fetch all the categories
+	// --------------------------	
+	$sql = "SELECT id as catID, category as description, parentID, catIntro, catOrder FROM {categories} ORDER BY category ASC";
+	$result = db_query($sql);
+
+	while ( $row = db_fetch_object ( $result ) ) {
+		
+		if (trim($row->catID) == $codCat && $row->catIntro != null) {
+			$catIntro = $row->catIntro;
+		}
+	
+		// Subcategory
+		if(isset($codCat) && !empty($codCat)){
+			if(trim($row->parentID) == $codCat && trim($row->catID) != $codCat){
+				$arrCategories[trim($row->catID)] = trim($row->description);
+				$showCourses = $topCat = false;
+			} 
+		}
+		// Subject area 
+		else {
+			if(trim($row->catID) == trim($row->parentID)){
+				$arrCategories[trim($row->catID)] = trim($row->description);
+				$showCourses = false;
+			}
+		}
+		
+	}
+	
+	if($showCourses){
+		return (course_app_browse(null, null, $codCat, null, false, true));		
+	} else {
+		return check_markup($catIntro, FILTER_FORMAT_DEFAULT, false) . theme('course_category', $arrCategories, $topCat);
+	}
+	
+}
+
+
+/**
+ * callback to generate a pdf file with the information of a course.
+ */
+function course_pdf($nid) {
+	$coursedata = course_app_load_course ( $nid );
+	if ($coursedata->Code == '') {
+		drupal_set_message ( "Error creating the PDF file. Apologies for any inconvenience." );
+		drupal_not_found ();
+	}
+	
+	// Including custom libraries
+	require_once ("." . base_path () . "sites/all/libraries/custom/pdfGeneratorLib.php");
+	require_once ("." . base_path () . "sites/all/libraries/custom/linkParserLib.php");
+	
+	// create new PDF document
+	$pdf = new MYPDF ( PDF_PAGE_ORIENTATION, PDF_UNIT, PDF_PAGE_FORMAT, true, 'UTF-8', false );
+	
+	// set document information
+	$pdf->SetCreator ( PDF_CREATOR );
+	$pdf->SetAuthor ( 'RACC' );
+	$pdf->SetTitle ( "{$coursedata->Description} ({$coursedata->Code})" );
+	$pdf->SetSubject ( "Course Outline ({$coursedata->Description})" );
+	
+	$pdf->SetKeywords ( $coursedata->CusMemo10 );
+	
+	// $pdf->setPrintHeader(false);
+	$pdf->SetHeaderData ( 'racc.jpg', PDF_HEADER_LOGO_WIDTH, "", "" );
+	
+	// set header and footer fonts
+	$pdf->setHeaderFont ( Array (
+			PDF_FONT_NAME_MAIN,
+			'',
+			PDF_FONT_SIZE_MAIN 
+	) );
+	$pdf->setFooterFont ( Array (
+			PDF_FONT_NAME_DATA,
+			'',
+			PDF_FONT_SIZE_DATA 
+	) );
+	
+	// set default monospaced font
+	$pdf->SetDefaultMonospacedFont ( PDF_FONT_MONOSPACED );
+	
+	// set margins
+	$pdf->SetMargins ( PDF_MARGIN_LEFT, PDF_MARGIN_TOP, PDF_MARGIN_RIGHT );
+	$pdf->SetFooterMargin ( PDF_MARGIN_FOOTER );
+	
+	// set auto page breaks
+	$pdf->SetAutoPageBreak ( TRUE, PDF_MARGIN_BOTTOM );
+	
+	// set image scale factor
+	$pdf->setImageScale ( PDF_IMAGE_SCALE_RATIO );
+	
+	// set some language-dependent strings
+	$pdf->setLanguageArray ( $l );
+	
+	// ---------------------------------------------------------
+	// Course Information header
+	// ---------------------------------------------------------
+	$txt = "<p>";
+	$txt .= "<strong>Availability:</strong> " . ($coursedata->is_full || $coursedata->is_closed ? 'No' : 'Yes') . " <br />";
+	if ($coursedata->fullFee == "TBA" || $coursedata->Concessionary_Fee == 99999) {
+		$txt .= "<strong>Price:</strong> TBA (Concessionary/non-EU fees to be determined) <br />";
+	} 
+	elseif ($coursedata->Concessionary_Fee !== NULL /*&& $coursedata->Concessionary_Fee > 0 Lucy removed to display concessionary fees requested by Nigel 13-03-14*/) {
+		$txt .= "<strong>Price:</strong> &pound;" . sprintf ( '%01.2f (&pound;%01.2f Concessionary Fee. &pound;%01.2f non-EU)', ($coursedata->fullFee - $coursedata->fullfeediscount), $coursedata->Concessionary_Fee, $coursedata->nonEUDiscount ) . " <br />";
+	} else {
+		$txt .= "<strong>Price:</strong> &pound;" . sprintf ( '%01.2f (&pound;%01.2f non-EU)', ($coursedata->fullFee - $coursedata->fullfeediscount), $coursedata->nonEUDiscount ) . " <br />";
+	}
+	$txt .= "<strong>Start Date:</strong> {$coursedata->Start} <br />";
+	$txt .= "<strong>Weekdays/Time:</strong> {$coursedata->daystimes} <br />";
+	$txt .= "<strong>Tutor Approval Required:</strong> " . ($coursedata->WarnEnr == 0 ? 'No' : 'Yes') . " <br />";
+	$txt .= "<strong>Number of Weeks:</strong> {$coursedata->Weeks} <br />";
+	
+	// --------------------------------------------------------
+	// Implementation of alternative dates
+	// --------------------------------------------------------
+	if (isset ( $coursedata->AltInstances )) {
+		$txt .= "<strong>Alternative Dates:</strong> ";
+		$txt .= '<ul style="list-style-type: none; margin-left: 10px;"> ';
+		foreach ( $coursedata->AltInstances as $altCourse ) {
+			$tmpTxt = "";
+			$tmpTxt .= sprintf ( '<a href="http://www.racc.ac.uk/course/%s" title="%s">%s</a> %s <em>Start:</em> %s<br/> <em>Duration:</em> %s week(s) <em>Days/Time</em>: %s', $altCourse ['code'], $altCourse ['desc'], $altCourse ['code'], $altCourse ['desc'], $altCourse ['date'], $altCourse ['weeks'], empty ( $altCourse ['days'] ) ? " tbc " : $altCourse ['days'] );
+			$txt .= "<li>" . rtrim ( $tmpTxt, "," ) . "</li>";
+		}
+		$txt .= '</ul> ';
+	}
+	$txt .= "</p><p>&nbsp;</p>";
+	
+	// ---------------------------------------------------------
+	// Course Title and Code
+	// ---------------------------------------------------------
+	$pdf->PrintData ( $coursedata->Description . '(' . $coursedata->Code . ')', course_app_clearmarkup ( linkParser ( $txt ) ), true, true );
+	
+	// ---------------------------------------------------------
+	// Course Overview
+	// ---------------------------------------------------------
+	$pdf->PrintData ( 'Course Overview:', course_app_clearmarkup ( linkParser ( $coursedata->Overview ) ), false, true );
+	
+	// ---------------------------------------------------------
+	// Entry Requirements
+	// ---------------------------------------------------------
+	$pdf->PrintData ( 'Entry Requirements:', course_app_clearmarkup ( linkParser ( $coursedata->EntryReq ) ), false, true );
+	
+	// ---------------------------------------------------------
+	// Course Content
+	// ---------------------------------------------------------
+	$pdf->PrintData ( 'Course Content:', course_app_clearmarkup ( linkParser ( $coursedata->Content ) ), false, true );
+	
+	// ---------------------------------------------------------
+	// Assessment Methods
+	// ---------------------------------------------------------
+	if ($coursedata->Assessment) {
+		$pdf->PrintData ( 'Assessment Methods:', course_app_clearmarkup ( linkParser ( $coursedata->Assessment ) ), false, true );
+	}
+	
+	// ---------------------------------------------------------
+	// Additional Information
+	// ---------------------------------------------------------
+	if ($coursedata->Additional) {
+		$txt = "<p><br /> <strong> If you would like more information on course fees andhow to get additional help to pay for them, please click <a href=\"/course-fees\" target=_blank>here</a> </strong> <br /></p>";
+		$pdf->PrintData ( 'Additional Information:', course_app_clearmarkup ( linkParser ( $coursedata->Additional . $txt ) ), false, true );
+	}
+	
+	// ---------------------------------------------------------
+	// Bring To First Class
+	// ---------------------------------------------------------
+	if ($coursedata->First_class) {
+		$pdf->PrintData ( 'Bring To First Class:', course_app_clearmarkup ( linkParser ( $coursedata->First_class ) ), false, true );
+	}
+	
+	// ---------------------------------------------------------
+	// Attendance
+	// ---------------------------------------------------------
+	if ($coursedata->Attendance) {
+		$pdf->PrintData ( 'Attendance:', course_app_clearmarkup ( linkParser ( $coursedata->Attendance ) ), false, true );
+	}
+	
+	// ---------------------------------------------------------
+	// Further Study and Career Opportunities
+	// ---------------------------------------------------------
+	if ($coursedata->Further_study) {
+		$pdf->PrintData ( 'Further Study and Career Opportunities:', course_app_clearmarkup ( linkParser ( $coursedata->Further_study ) ), false, true );
+	}
+	
+	// ---------------------------------------------------------
+	// How to Enrol
+	// ---------------------------------------------------------
+	if ($coursedata->Enrolment) {
+		$pdf->PrintData ( 'How to Enrol:', course_app_clearmarkup ( linkParser ( $coursedata->Enrolment ) ), false, true );
+	}
+	
+	// ---------------------------------------------------------
+	// FAQ
+	// ---------------------------------------------------------
+	if ($coursedata->FAQ) {
+		$pdf->PrintData ( 'Frequently Asked Questions:', course_app_clearmarkup ( linkParser ( $coursedata->FAQ ) ), false, true );
+	}
+	
+	// ---------------------------------------------------------
+	// Information Advice and Guidance
+	// ---------------------------------------------------------
+	$txt = "You can enrol online, over the phone or in person at either site<br/>";
+	$txt .= '<a href="http://www.racc.ac.uk/student-advice-support">IAG - Not sure which course to go for? Find out more about our IAG service</a>';
+	$pdf->PrintData ( 'Information Advice and Guidance:', course_app_clearmarkup ( linkParser ( $txt ) ), false, true );
+	
+	// ---------------------------------------------------------
+	// Close and output PDF document
+	// ---------------------------------------------------------
+	$url = file_directory_path () . "/courseoutlines/" . $coursedata->Code . 'CourseOutline.pdf';
+	$pdf->Output ( $url, 'FD' );
+	header ( 'Location: ' . $url, TRUE );
+}
+
+function course_app_inline_sunday() {
+	
+	//$arrCourses = null;
+	//course_app_log ();
+	
+	$sql = "";
+	
+	$sql = "SELECT DISTINCT trim(i.Code) as Code, trim(i.Description) as Description, ";
+	$sql .= "trim(i.CusText2) as catID, (select TRIM(category) from categories where id = i.CusText2 LIMIT 1) as catDesc, ";
+	$sql .= "trim(i.CusText3) as Subject, (select TRIM(category) from categories where id = i.CusText3 LIMIT 1) as subDesc, ";
+	$sql .= "i.Days, i.CusMemo1, i.CusDate1, i.CusDate2, i.Start, i.Weeks, ifnull(f.fullfee,0) as fullfee, f.concessionary_fee as concessionary ";
+	$sql .= "FROM {courseinfo} i inner join {fullcoursefees} f using (Code)";
+	$sql .= "WHERE ( i.Days LIKE 'Sun%' AND(i.Status<>'CLOS' OR i.Status IS NULL)) ";	
+	$sql .= "GROUP BY i.Code ";
+	$sql .= ' ORDER BY case when datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y")) > 21';
+	$sql .= ' then abs(datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y"))) + 999';
+	$sql .= ' else abs(datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y"))) end';
+	
+	$result = db_query ($sql);
+	
+	while ( $row = db_fetch_object ( $result ) ) {
+	
+		List ( $sKey, $sSubject ) = array(trim ( $row->catID ), trim ( $row->Subject ));
+	
+		// Add the Subject to the array
+		if (! array_key_exists ( $sSubject, $arrCourses )) {
+			$arrCourses [$sSubject] = array ('catDes' => trim ( $row->subDesc ), 'subjects' => array ());
+		}
+		
+		// Add the Category to the array
+		if (! array_key_exists ( $sKey, $arrCourses [$sSubject] ['subjects'] )) {
+			$arrCourses [$sSubject] ['subjects'] [$sKey] = array (
+					'catDes' => trim ( $row->catDesc ),
+					'courses' => array ()
+			);
+		}
+	
+		$iCont = count ( $arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] );
+		if ($iCont > 0 && ($arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont - 1]->Code == $row->Code)) {
+			$arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont - 1]->Days .= ", " . ucfirst ( $row->Days );
+		} else {
+			$row->Days = ucfirst ( $row->Days );
+			$arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont ++] = $row;
+		}
+	}
+	
+	return theme ('course_tree', $arrCourses, NULL, NULL, 'SUNDAY');	
+
+}
+
+function course_app_inline_access() {
+	
+	//$arrCourses = null;
+	//course_app_log ();
+	
+	$sql = "";
+	
+	$sql = "SELECT DISTINCT trim(i.Code) as Code, trim(i.Description) as Description, ";
+	$sql .= "trim(i.CusText2) as catID, (select TRIM(category) from categories where id = i.CusText2 LIMIT 1) as catDesc, ";
+	$sql .= "trim(i.CusText3) as Subject, (select TRIM(category) from categories where id = i.CusText3 LIMIT 1) as subDesc, ";
+	$sql .= "i.Days, i.CusMemo1, i.CusDate1, i.CusDate2, i.Start, i.Weeks, ifnull(f.fullfee,0) as fullfee, f.concessionary_fee as concessionary ";
+	$sql .= "FROM {courseinfo} i inner join {fullcoursefees} f using (Code)";
+	$sql .= "WHERE ( i.Description LIKE '%Access to HE%' AND(i.Status<>'CLOS' OR i.Status IS NULL)) ";	
+	$sql .= "GROUP BY i.Code ";
+	$sql .= ' ORDER BY case when datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y")) > 21';
+	$sql .= ' then abs(datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y"))) + 999';
+	$sql .= ' else abs(datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y"))) end';
+	
+	$result = db_query ($sql);
+	
+	while ( $row = db_fetch_object ( $result ) ) {
+	
+		List ( $sKey, $sSubject ) = array(trim ( $row->catID ), trim ( $row->Subject ));
+	
+		// Add the Subject to the array
+		if (! array_key_exists ( $sSubject, $arrCourses )) {
+			$arrCourses [$sSubject] = array ('catDes' => trim ( $row->subDesc ), 'subjects' => array ());
+		}
+		
+		// Add the Category to the array
+		if (! array_key_exists ( $sKey, $arrCourses [$sSubject] ['subjects'] )) {
+			$arrCourses [$sSubject] ['subjects'] [$sKey] = array (
+					'catDes' => trim ( $row->catDesc ),
+					'courses' => array ()
+			);
+		}
+	
+		$iCont = count ( $arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] );
+		if ($iCont > 0 && ($arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont - 1]->Code == $row->Code)) {
+			$arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont - 1]->Days .= ", " . ucfirst ( $row->Days );
+		} else {
+			$row->Days = ucfirst ( $row->Days );
+			$arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont ++] = $row;
+		}
+	}
+	
+	return theme ('course_tree', $arrCourses, NULL, NULL, 'SUNDAY');	
+
+}
+
+function course_app_inline_qualart() {
+		
+	$sql = "";
+	
+	$sql = "SELECT DISTINCT trim(i.Code) as Code, trim(i.Description) as Description, ";
+	$sql .= "trim(i.CusText2) as catID, (select TRIM(category) from categories where id = i.CusText2 LIMIT 1) as catDesc, ";
+	$sql .= "trim(i.CusText3) as Subject, (select TRIM(category) from categories where id = i.CusText3 LIMIT 1) as subDesc, ";
+	$sql .= "i.Days, i.CusDate1, i.CusDate2, i.Start, i.Weeks, ifnull(f.fullfee,0) as fullfee, f.concessionary_fee as concessionary ";
+	$sql .= "FROM {courseinfo} i inner join {fullcoursefees} f using (Code) inner join {coursesections} cs using (Code)";
+	$sql .= "WHERE (i.CusText3 LIKE 'ARTDM%' AND(i.Status<>'CLOS' OR i.Status IS NULL)) ";	
+	
+	$sql .= "AND cs.sectionID = 'QUAL' ";
+	
+	$sql .= "GROUP BY i.Code ";
+	$sql .= ' ORDER BY case when datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y")) > 21';
+	$sql .= ' then abs(datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y"))) + 999';
+	$sql .= ' else abs(datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y"))) end';
+	
+	
+	$result = db_query ($sql);
+	
+	while ( $row = db_fetch_object ( $result ) ) {
+	
+		List ( $sKey, $sSubject ) = array(trim ( $row->catID ), trim ( $row->Subject ));
+	
+		// Add the Subject to the array
+		if (! array_key_exists ( $sSubject, $arrCourses )) {
+			$arrCourses [$sSubject] = array ('catDes' => trim ( $row->subDesc ), 'subjects' => array ());
+		}
+		
+		// Add the Category to the array
+		if (! array_key_exists ( $sKey, $arrCourses [$sSubject] ['subjects'] )) {
+			$arrCourses [$sSubject] ['subjects'] [$sKey] = array (
+					'catDes' => trim ( $row->catDesc ),
+					'courses' => array ()
+			);
+		}
+	
+		$iCont = count ( $arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] );
+		if ($iCont > 0 && ($arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont - 1]->Code == $row->Code)) {
+			$arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont - 1]->Days .= ", " . ucfirst ( $row->Days );
+		} else {
+			$row->Days = ucfirst ( $row->Days );
+			$arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont ++] = $row;
+		}
+	}
+	
+	return theme ('course_tree', $arrCourses, NULL, NULL, 'QUALART');	
+
+}
+
+// function to display Qualification courses by CusMemo1 need to move flag 
+
+function course_app_inline_nottolate() {
+	
+	//$arrCourses = null;
+	//course_app_log ();
+	
+	$sql = "";
+	
+	$sql = "SELECT DISTINCT trim(i.Code) as Code, trim(i.Description) as Description, ";
+	$sql .= "trim(i.CusText2) as catID, (select TRIM(category) from categories where id = i.CusText2 LIMIT 1) as catDesc, ";
+	$sql .= "trim(i.CusText3) as Subject, (select TRIM(category) from categories where id = i.CusText3 LIMIT 1) as subDesc, ";
+	$sql .= "i.Days, i.CusMemo1, i.CusDate1, i.CusDate2, i.Start, i.Weeks, ifnull(f.fullfee,0) as fullfee, f.concessionary_fee as concessionary ";
+	$sql .= "FROM {courseinfo} i inner join {fullcoursefees} f using (Code)";
+	$sql .= "WHERE (i.Status<>'CLOS' OR i.Status IS NULL) AND (datediff(NOW(), str_to_date(i.start, \"%%d/%%m/%%Y\"))<= 0  AND i.Weeks >=1 )  AND datediff(NOW(), str_to_date(i.start, \"%%d/%%m/%%Y\")) >= -10 ";	
+	$sql .= "GROUP BY i.Code ";
+	$sql .= ' ORDER BY subDesc ASC, catDesc ASC';
+
+	
+	$result = db_query ($sql);
+	
+	while ( $row = db_fetch_object ( $result ) ) {
+	
+		List ( $sKey, $sSubject ) = array(trim ( $row->catID ), trim ( $row->Subject ));
+	
+		// Add the Subject to the array
+		if (! array_key_exists ( $sSubject, $arrCourses )) {
+			$arrCourses [$sSubject] = array ('catDes' => trim ( $row->subDesc ), 'subjects' => array ());
+		}
+		
+		// Add the Category to the array
+		if (! array_key_exists ( $sKey, $arrCourses [$sSubject] ['subjects'] )) {
+			$arrCourses [$sSubject] ['subjects'] [$sKey] = array (
+					'catDes' => trim ( $row->catDesc ),
+					'courses' => array ()
+			);
+		}
+	
+		$iCont = count ( $arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] );
+		if ($iCont > 0 && ($arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont - 1]->Code == $row->Code)) {
+			$arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont - 1]->Days .= ", " . ucfirst ( $row->Days );
+		} else {
+			$row->Days = ucfirst ( $row->Days );
+			$arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont ++] = $row;
+		}
+	}
+	
+	return theme ('course_tree', $arrCourses, NULL, NULL, 'LATE');	
+
+}
+
+function course_app_inline_family() {
+	
+	//$arrCourses = null;
+	//course_app_log ();
+	
+	$sql = "";
+	
+	$sql = "SELECT DISTINCT trim(i.Code) as Code, trim(i.Description) as Description, ";
+	$sql .= "trim(i.CusText2) as catID, (select TRIM(category) from categories where id = i.CusText2 LIMIT 1) as catDesc, ";
+	$sql .= "trim(i.CusText3) as Subject, (select TRIM(category) from categories where id = i.CusText3 LIMIT 1) as subDesc, ";
+	$sql .= "i.Days, i.CusMemo1, i.CusDate1, i.CusDate2, i.Start, i.Weeks, ifnull(f.fullfee,0) as fullfee, f.concessionary_fee as concessionary ";
+	$sql .= "FROM {courseinfo} i inner join {fullcoursefees} f using (Code)";
+	$sql .= "WHERE ( i.Description LIKE '%Family%' OR i.Description LIKE '%Families%' AND(i.Status<>'CLOS' OR i.Status IS NULL)) ";	
+	$sql .= "GROUP BY i.Code ";
+	$sql .= ' ORDER BY case when datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y")) > 21';
+	$sql .= ' then abs(datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y"))) + 999';
+	$sql .= ' else abs(datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y"))) end';
+	
+	$result = db_query ($sql);
+	
+	while ( $row = db_fetch_object ( $result ) ) {
+	
+		List ( $sKey, $sSubject ) = array(trim ( $row->catID ), trim ( $row->Subject ));
+	
+		// Add the Subject to the array
+		if (! array_key_exists ( $sSubject, $arrCourses )) {
+			$arrCourses [$sSubject] = array ('catDes' => trim ( $row->subDesc ), 'subjects' => array ());
+		}
+		
+		// Add the Category to the array
+		if (! array_key_exists ( $sKey, $arrCourses [$sSubject] ['subjects'] )) {
+			$arrCourses [$sSubject] ['subjects'] [$sKey] = array (
+					'catDes' => trim ( $row->catDesc ),
+					'courses' => array ()
+			);
+		}
+	
+		$iCont = count ( $arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] );
+		if ($iCont > 0 && ($arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont - 1]->Code == $row->Code)) {
+			$arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont - 1]->Days .= ", " . ucfirst ( $row->Days );
+		} else {
+			$row->Days = ucfirst ( $row->Days );
+			$arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont ++] = $row;
+		}
+	}
+	
+	return theme ('course_tree', $arrCourses, NULL, NULL, 'FAMILY');	
+
+}
+
+function course_app_inline_hecourses($flag = NULL) {
+	
+	//$arrCourses = null;
+	//course_app_log ();
+	
+	$sql = "";
+	
+	$sql = "SELECT DISTINCT trim(i.Code) as Code, trim(i.Description) as Description, ";
+	$sql .= "trim(i.CusText2) as catID, (select TRIM(category) from categories where id = i.CusText2 LIMIT 1) as catDesc, ";
+	$sql .= "trim(i.CusText3) as Subject, (select TRIM(category) from categories where id = i.CusText3 LIMIT 1) as subDesc, ";
+	$sql .= "i.Days, i.CusMemo1, i.CusDate1, i.CusDate2, i.Start, i.Weeks, ifnull(f.fullfee,0) as fullfee, f.concessionary_fee as concessionary ";
+	$sql .= "FROM {courseinfo} i inner join {fullcoursefees} f using (Code)";
+	$sql .= "WHERE ( i.Description LIKE '%Pearson Level 5%' OR i.Description LIKE '%Pearson Level 4%' OR i.Description LIKE '%CELTA%' OR i.Description LIKE '%AAT Level 4%' AND(i.Status<>'CLOS' OR i.Status IS NULL)) ";	
+	$sql .= "GROUP BY i.Code ";
+	$sql .= ' ORDER BY case when datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y")) > 21';
+	$sql .= ' then abs(datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y"))) + 999';
+	$sql .= ' else abs(datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y"))) end';
+	
+	$result = db_query ($sql);
+	
+	while ( $row = db_fetch_object ( $result ) ) {
+	
+		List ( $sKey, $sSubject ) = array(trim ( $row->catID ), trim ( $row->Subject ));
+	
+		// Add the Subject to the array
+		if (! array_key_exists ( $sSubject, $arrCourses )) {
+			$arrCourses [$sSubject] = array ('catDes' => trim ( $row->subDesc ), 'subjects' => array ());
+		}
+		
+		// Add the Category to the array
+		if (! array_key_exists ( $sKey, $arrCourses [$sSubject] ['subjects'] )) {
+			$arrCourses [$sSubject] ['subjects'] [$sKey] = array (
+					'catDes' => trim ( $row->catDesc ),
+					'courses' => array ()
+			);
+		}
+	
+		$iCont = count ( $arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] );
+		if ($iCont > 0 && ($arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont - 1]->Code == $row->Code)) {
+			$arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont - 1]->Days .= ", " . ucfirst ( $row->Days );
+		} else {
+			$row->Days = ucfirst ( $row->Days );
+			$arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont ++] = $row;
+		}
+	}
+	
+	return theme ('course_tree', $arrCourses, NULL, NULL, 'HECOURSES');	
+
+}
+
+function course_app_inline_celta($flag = NULL) {
+	
+	//$arrCourses = null;
+	//course_app_log ();
+	
+	$sql = "";
+	
+	$sql = "SELECT DISTINCT trim(i.Code) as Code, trim(i.Description) as Description, ";
+	$sql .= "trim(i.CusText2) as catID, (select TRIM(category) from categories where id = i.CusText2 LIMIT 1) as catDesc, ";
+	$sql .= "trim(i.CusText3) as Subject, (select TRIM(category) from categories where id = i.CusText3 LIMIT 1) as subDesc, ";
+	$sql .= "i.Days, i.CusMemo1, i.CusDate1, i.CusDate2, i.Start, i.Weeks, ifnull(f.fullfee,0) as fullfee, f.concessionary_fee as concessionary ";
+	$sql .= "FROM {courseinfo} i inner join {fullcoursefees} f using (Code)";
+	$sql .= "WHERE (i.Description LIKE '%CELTA%' AND(i.Status<>'CLOS' OR i.Status IS NULL)) ";	
+	$sql .= "GROUP BY i.Code ";
+	$sql .= ' ORDER BY case when datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y")) > 21';
+	$sql .= ' then abs(datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y"))) + 999';
+	$sql .= ' else abs(datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y"))) end';
+	
+	$result = db_query ($sql);
+	
+	while ( $row = db_fetch_object ( $result ) ) {
+	
+		List ( $sKey, $sSubject ) = array(trim ( $row->catID ), trim ( $row->Subject ));
+	
+		// Add the Subject to the array
+		if (! array_key_exists ( $sSubject, $arrCourses )) {
+			$arrCourses [$sSubject] = array ('catDes' => trim ( $row->subDesc ), 'subjects' => array ());
+		}
+		
+		// Add the Category to the array
+		if (! array_key_exists ( $sKey, $arrCourses [$sSubject] ['subjects'] )) {
+			$arrCourses [$sSubject] ['subjects'] [$sKey] = array (
+					'catDes' => trim ( $row->catDesc ),
+					'courses' => array ()
+			);
+		}
+	
+		$iCont = count ( $arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] );
+		if ($iCont > 0 && ($arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont - 1]->Code == $row->Code)) {
+			$arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont - 1]->Days .= ", " . ucfirst ( $row->Days );
+		} else {
+			$row->Days = ucfirst ( $row->Days );
+			$arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont ++] = $row;
+		}
+	}
+	
+	return theme ('course_tree', $arrCourses, NULL, NULL, 'CELTA');	
+
+}
+
+function course_app_inline_bursary($flag = NULL) {
+	
+	//$arrCourses = null;
+	//course_app_log ();
+	
+	$sql = "";
+	
+	$sql = "SELECT DISTINCT trim(i.Code) as Code, trim(i.Description) as Description, ";
+	$sql .= "trim(i.CusText2) as catID, (select TRIM(category) from categories where id = i.CusText2 LIMIT 1) as catDesc, ";
+	$sql .= "trim(i.CusText3) as Subject, (select TRIM(category) from categories where id = i.CusText3 LIMIT 1) as subDesc, ";
+	$sql .= "i.Days, i.CusMemo1, i.CusDate1, i.CusDate2, i.Start, i.Weeks, i.TypeOfQual, ifnull(f.fullfee,0) as fullfee, f.concessionary_fee as concessionary ";
+	$sql .= "FROM {courseinfo} i inner join {fullcoursefees} f using (Code)";
+	$sql .= "WHERE ( (datediff(NOW(), str_to_date(i.start, \"%%d/%%m/%%Y\"))<= 0)AND i.TypeOfQual LIKE 'F' OR i.TypeOfQual LIKE 'G' AND (i.Description NOT LIKE '%Level 4%')AND(i.CusText2 NOT LIKE '%CMTCNT%')AND(i.CusText3 NOT LIKE '%TT%')AND(i.Code NOT LIKE '%L00478%') AND  (i.Status<>'CLOS' OR i.Status IS NULL)) ";	
+	$sql .= "GROUP BY i.Code ";
+	$sql .= ' ORDER BY case when datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y")) > 21';
+	$sql .= ' then abs(datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y"))) + 999';
+	$sql .= ' else abs(datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y"))) end';
+	
+	$result = db_query ($sql);
+	
+	while ( $row = db_fetch_object ( $result ) ) {
+	
+		List ( $sKey, $sSubject ) = array(trim ( $row->catID ), trim ( $row->Subject ));
+	
+		// Add the Subject to the array
+		if (! array_key_exists ( $sSubject, $arrCourses )) {
+			$arrCourses [$sSubject] = array ('catDes' => trim ( $row->subDesc ), 'subjects' => array ());
+		}
+		
+		// Add the Category to the array
+		if (! array_key_exists ( $sKey, $arrCourses [$sSubject] ['subjects'] )) {
+			$arrCourses [$sSubject] ['subjects'] [$sKey] = array (
+					'catDes' => trim ( $row->catDesc ),
+					'courses' => array ()
+			);
+		}
+	
+		$iCont = count ( $arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] );
+		if ($iCont > 0 && ($arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont - 1]->Code == $row->Code)) {
+			$arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont - 1]->Days .= ", " . ucfirst ( $row->Days );
+		} else {
+			$row->Days = ucfirst ( $row->Days );
+			$arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont ++] = $row;
+		}
+	}
+
+	
+	return theme ('course_tree', $arrCourses, NULL, NULL, 'BURSARY');	
+
+}
+
+function course_app_inline_wellbeing($flag = NULL) {
+	
+	//$arrCourses = null;
+	//course_app_log ();
+	
+	$sql = "";
+	
+	$sql = "SELECT DISTINCT trim(i.Code) as Code, trim(i.Description) as Description, ";
+	$sql .= "trim(i.CusText2) as catID, (select TRIM(category) from categories where id = i.CusText2 LIMIT 1) as catDesc, ";
+	$sql .= "trim(i.CusText3) as Subject, (select TRIM(category) from categories where id = i.CusText3 LIMIT 1) as subDesc, ";
+	$sql .= "i.Days, i.CusMemo1, i.CusDate1, i.CusDate2, i.Start, i.Weeks, i.TypeOfQual, ifnull(f.fullfee,0) as fullfee, f.concessionary_fee as concessionary ";
+	$sql .= "FROM {courseinfo} i inner join {fullcoursefees} f using (Code)";
+	$sql .= "WHERE ( i.TypeOfQual LIKE 'F' AND (datediff(NOW(), str_to_date(i.start, \"%%d/%%m/%%Y\"))<= 0) AND(i.Status<>'CLOS' OR i.Status IS NULL)) ";	
+	$sql .= "GROUP BY i.Code ";
+	$sql .= ' ORDER BY case when datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y")) > 21';
+	$sql .= ' then abs(datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y"))) + 999';
+	$sql .= ' else abs(datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y"))) end';
+	
+	$result = db_query ($sql);
+	
+	while ( $row = db_fetch_object ( $result ) ) {
+	
+		List ( $sKey, $sSubject ) = array(trim ( $row->catID ), trim ( $row->Subject ));
+	
+		// Add the Subject to the array
+		if (! array_key_exists ( $sSubject, $arrCourses )) {
+			$arrCourses [$sSubject] = array ('catDes' => trim ( $row->subDesc ), 'subjects' => array ());
+		}
+		
+		// Add the Category to the array
+		if (! array_key_exists ( $sKey, $arrCourses [$sSubject] ['subjects'] )) {
+			$arrCourses [$sSubject] ['subjects'] [$sKey] = array (
+					'catDes' => trim ( $row->catDesc ),
+					'courses' => array ()
+			);
+		}
+	
+		$iCont = count ( $arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] );
+		if ($iCont > 0 && ($arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont - 1]->Code == $row->Code)) {
+			$arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont - 1]->Days .= ", " . ucfirst ( $row->Days );
+		} else {
+			$row->Days = ucfirst ( $row->Days );
+			$arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont ++] = $row;
+		}
+	}
+
+	
+	return theme ('course_tree', $arrCourses, NULL, NULL, 'WELLBEING');	
+
+}
+
+function course_app_inline_jazz($flag = NULL) {
+	
+	//$arrCourses = null;
+	//course_app_log ();
+	
+	$sql = "";
+	
+	$sql = "SELECT DISTINCT trim(i.Code) as Code, trim(i.Description) as Description, ";
+	$sql .= "trim(i.CusText2) as catID, (select TRIM(category) from categories where id = i.CusText2 LIMIT 1) as catDesc, ";
+	$sql .= "trim(i.CusText3) as Subject, (select TRIM(category) from categories where id = i.CusText3 LIMIT 1) as subDesc, ";
+	$sql .= "i.Days, i.CusMemo1, i.CusDate1, i.CusDate2, i.Start, i.Weeks, i.CusText2, ifnull(f.fullfee,0) as fullfee, f.concessionary_fee as concessionary ";
+	$sql .= "FROM {courseinfo} i inner join {fullcoursefees} f using (Code)";
+	$sql .= "WHERE (i.CusText2 LIKE '%MUSCR%' AND(i.Status<>'CLOS' OR i.Status IS NULL)) ";	
+	$sql .= "GROUP BY i.Code ";
+	$sql .= ' ORDER BY case when datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y")) > 21';
+	$sql .= ' then abs(datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y"))) + 999';
+	$sql .= ' else abs(datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y"))) end';
+	
+	$result = db_query ($sql);
+	
+	while ( $row = db_fetch_object ( $result ) ) {
+	
+		List ( $sKey, $sSubject ) = array(trim ( $row->catID ), trim ( $row->Subject ));
+	
+		// Add the Subject to the array
+		if (! array_key_exists ( $sSubject, $arrCourses )) {
+			$arrCourses [$sSubject] = array ('catDes' => trim ( $row->subDesc ), 'subjects' => array ());
+		}
+		
+		// Add the Category to the array
+		if (! array_key_exists ( $sKey, $arrCourses [$sSubject] ['subjects'] )) {
+			$arrCourses [$sSubject] ['subjects'] [$sKey] = array (
+					'catDes' => trim ( $row->catDesc ),
+					'courses' => array ()
+			);
+		}
+	
+		$iCont = count ( $arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] );
+		if ($iCont > 0 && ($arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont - 1]->Code == $row->Code)) {
+			$arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont - 1]->Days .= ", " . ucfirst ( $row->Days );
+		} else {
+			$row->Days = ucfirst ( $row->Days );
+			$arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont ++] = $row;
+		}
+	}
+
+	
+	return theme ('course_tree', $arrCourses, NULL, NULL, 'JAZZ');	
+
+}
+
+function course_app_inline_youngpeople() {
+	
+	//$arrCourses = null;
+	//course_app_log ();
+	
+	$sql = "";
+	
+	$sql = "SELECT DISTINCT trim(i.Code) as Code, trim(i.Description) as Description, ";
+	$sql .= "trim(i.CusText2) as catID, (select TRIM(category) from categories where id = i.CusText2 LIMIT 1) as catDesc, ";
+	$sql .= "trim(i.CusText3) as Subject, (select TRIM(category) from categories where id = i.CusText3 LIMIT 1) as subDesc, ";
+	$sql .= "i.Days, i.CusMemo1, i.CusDate1, i.CusDate2, i.Start, i.Weeks, ifnull(f.fullfee,0) as fullfee, f.concessionary_fee as concessionary ";
+	$sql .= "FROM {courseinfo} i inner join {fullcoursefees} f using (Code)";
+	$sql .= "WHERE ( i.Description LIKE '%14-19%' OR i.Description LIKE '%16-19%' AND(i.Status<>'CLOS' OR i.Status IS NULL)) ";	
+	$sql .= "GROUP BY i.Code ";
+	$sql .= ' ORDER BY case when datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y")) > 21';
+	$sql .= ' then abs(datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y"))) + 999';
+	$sql .= ' else abs(datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y"))) end';
+	
+	$result = db_query ($sql);
+	
+	while ( $row = db_fetch_object ( $result ) ) {
+	
+		List ( $sKey, $sSubject ) = array(trim ( $row->catID ), trim ( $row->Subject ));
+	
+		// Add the Subject to the array
+		if (! array_key_exists ( $sSubject, $arrCourses )) {
+			$arrCourses [$sSubject] = array ('catDes' => trim ( $row->subDesc ), 'subjects' => array ());
+		}
+		
+		// Add the Category to the array
+		if (! array_key_exists ( $sKey, $arrCourses [$sSubject] ['subjects'] )) {
+			$arrCourses [$sSubject] ['subjects'] [$sKey] = array (
+					'catDes' => trim ( $row->catDesc ),
+					'courses' => array ()
+			);
+		}
+	
+		$iCont = count ( $arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] );
+		if ($iCont > 0 && ($arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont - 1]->Code == $row->Code)) {
+			$arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont - 1]->Days .= ", " . ucfirst ( $row->Days );
+		} else {
+			$row->Days = ucfirst ( $row->Days );
+			$arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont ++] = $row;
+		}
+	}
+	
+	return theme ('course_tree', $arrCourses, NULL, NULL, 'YOUNGPEOPLE');	
+
+}
+
+function course_app_inline_intensive() {
+	
+	//$arrCourses = null;
+	//course_app_log ();
+	
+	$sql = "";
+	
+	$sql = "SELECT DISTINCT trim(i.Code) as Code, trim(i.Description) as Description, ";
+	$sql .= "trim(i.CusText2) as catID, (select TRIM(category) from categories where id = i.CusText2 LIMIT 1) as catDesc, ";
+	$sql .= "trim(i.CusText3) as Subject, (select TRIM(category) from categories where id = i.CusText3 LIMIT 1) as subDesc, ";
+	$sql .= "i.Days, i.CusMemo1, i.CusDate1, i.CusDate2, i.Start, i.Weeks, ifnull(f.fullfee,0) as fullfee, f.concessionary_fee as concessionary ";
+	$sql .= "FROM {courseinfo} i inner join {fullcoursefees} f using (Code)";
+	$sql .= "WHERE ( i.Description LIKE '%Saturday Intensive%'AND(i.Status<>'CLOS' OR i.Status IS NULL)) ";	
+	$sql .= "GROUP BY i.Code ";
+	$sql .= ' ORDER BY case when datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y")) > 21';
+	$sql .= ' then abs(datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y"))) + 999';
+	$sql .= ' else abs(datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y"))) end';
+	
+	$result = db_query ($sql);
+	
+	while ( $row = db_fetch_object ( $result ) ) {
+	
+		List ( $sKey, $sSubject ) = array(trim ( $row->catID ), trim ( $row->Subject ));
+	
+		// Add the Subject to the array
+		if (! array_key_exists ( $sSubject, $arrCourses )) {
+			$arrCourses [$sSubject] = array ('catDes' => trim ( $row->subDesc ), 'subjects' => array ());
+		}
+		
+		// Add the Category to the array
+		if (! array_key_exists ( $sKey, $arrCourses [$sSubject] ['subjects'] )) {
+			$arrCourses [$sSubject] ['subjects'] [$sKey] = array (
+					'catDes' => trim ( $row->catDesc ),
+					'courses' => array ()
+			);
+		}
+	
+		$iCont = count ( $arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] );
+		if ($iCont > 0 && ($arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont - 1]->Code == $row->Code)) {
+			$arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont - 1]->Days .= ", " . ucfirst ( $row->Days );
+		} else {
+			$row->Days = ucfirst ( $row->Days );
+			$arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont ++] = $row;
+		}
+	}
+	
+	return theme ('course_tree', $arrCourses, NULL, NULL, 'INTENSIVE');	
+
+}
+
+function course_app_inline_hillcroft() {
+	
+	//$arrCourses = null;
+	//course_app_log ();
+	
+	$sql = "";
+	
+	$sql = "SELECT DISTINCT trim(i.Code) as Code, trim(i.Description) as Description, ";
+	$sql .= "trim(i.CusText2) as catID, (select TRIM(category) from categories where id = i.CusText2 LIMIT 1) as catDesc, ";
+	$sql .= "trim(i.CusText3) as Subject, (select TRIM(category) from categories where id = i.CusText3 LIMIT 1) as subDesc, ";
+	$sql .= "i.Days, i.CusMemo1, i.CusDate1, i.CusDate2, i.Start, i.Weeks, ifnull(f.fullfee,0) as fullfee, f.concessionary_fee as concessionary ";
+	$sql .= "FROM {courseinfo} i inner join {fullcoursefees} f using (Code)";
+	$sql .= "WHERE ( i.Description LIKE '%Hillcroft%'AND(i.Status<>'CLOS' OR i.Status IS NULL)) ";	
+	$sql .= "GROUP BY i.Code ";
+	$sql .= ' ORDER BY case when datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y")) > 21';
+	$sql .= ' then abs(datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y"))) + 999';
+	$sql .= ' else abs(datediff(now(), str_to_date(i.start, "%%d/%%m/%%Y"))) end';
+	
+	$result = db_query ($sql);
+	
+	while ( $row = db_fetch_object ( $result ) ) {
+	
+		List ( $sKey, $sSubject ) = array(trim ( $row->catID ), trim ( $row->Subject ));
+	
+		// Add the Subject to the array
+		if (! array_key_exists ( $sSubject, $arrCourses )) {
+			$arrCourses [$sSubject] = array ('catDes' => trim ( $row->subDesc ), 'subjects' => array ());
+		}
+		
+		// Add the Category to the array
+		if (! array_key_exists ( $sKey, $arrCourses [$sSubject] ['subjects'] )) {
+			$arrCourses [$sSubject] ['subjects'] [$sKey] = array (
+					'catDes' => trim ( $row->catDesc ),
+					'courses' => array ()
+			);
+		}
+	
+		$iCont = count ( $arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] );
+		if ($iCont > 0 && ($arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont - 1]->Code == $row->Code)) {
+			$arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont - 1]->Days .= ", " . ucfirst ( $row->Days );
+		} else {
+			$row->Days = ucfirst ( $row->Days );
+			$arrCourses [$sSubject] ['subjects'] [$sKey] ['courses'] [$iCont ++] = $row;
+		}
+	}
+	
+	return theme ('course_tree', $arrCourses, NULL, NULL, 'HILLCROFT');	
+
+}
+
+
+
+
+
+
